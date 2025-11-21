@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,40 +7,82 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { Plane } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
+  const [loginData, setLoginData] = useState({ email: "", password: "" });
+  const [signupData, setSignupData] = useState({ name: "", email: "", password: "" });
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user, signIn, signUp } = useAuth();
+
+  useEffect(() => {
+    if (user) {
+      navigate("/dashboard");
+    }
+  }, [user, navigate]);
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
     
-    // TODO: Implement actual authentication
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      const { error } = await signIn(loginData.email, loginData.password);
+      
+      if (error) {
+        toast({
+          title: "Login failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Login successful!",
+          description: "Welcome back to SmartTrip",
+        });
+        navigate("/dashboard");
+      }
+    } catch (error: any) {
       toast({
-        title: "Welcome back!",
-        description: "You've successfully logged in.",
+        title: "Login failed",
+        description: error.message || "An error occurred",
+        variant: "destructive",
       });
-      navigate("/dashboard");
-    }, 1000);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSignup = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
     
-    // TODO: Implement actual authentication
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      const { error } = await signUp(signupData.email, signupData.password, signupData.name);
+      
+      if (error) {
+        toast({
+          title: "Signup failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Account created!",
+          description: "Welcome to SmartTrip",
+        });
+        navigate("/dashboard");
+      }
+    } catch (error: any) {
       toast({
-        title: "Account created!",
-        description: "Welcome to SmartTrip.",
+        title: "Signup failed",
+        description: error.message || "An error occurred",
+        variant: "destructive",
       });
-      navigate("/dashboard");
-    }, 1000);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -70,6 +112,8 @@ const Auth = () => {
                     id="login-email"
                     type="email"
                     placeholder="you@example.com"
+                    value={loginData.email}
+                    onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
                     required
                   />
                 </div>
@@ -79,6 +123,8 @@ const Auth = () => {
                     id="login-password"
                     type="password"
                     placeholder="••••••••"
+                    value={loginData.password}
+                    onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
                     required
                   />
                 </div>
@@ -96,6 +142,8 @@ const Auth = () => {
                     id="signup-name"
                     type="text"
                     placeholder="Jane Doe"
+                    value={signupData.name}
+                    onChange={(e) => setSignupData({ ...signupData, name: e.target.value })}
                     required
                   />
                 </div>
@@ -105,6 +153,8 @@ const Auth = () => {
                     id="signup-email"
                     type="email"
                     placeholder="you@example.com"
+                    value={signupData.email}
+                    onChange={(e) => setSignupData({ ...signupData, email: e.target.value })}
                     required
                   />
                 </div>
@@ -114,7 +164,10 @@ const Auth = () => {
                     id="signup-password"
                     type="password"
                     placeholder="••••••••"
+                    value={signupData.password}
+                    onChange={(e) => setSignupData({ ...signupData, password: e.target.value })}
                     required
+                    minLength={6}
                   />
                 </div>
                 <Button type="submit" className="w-full" disabled={isLoading}>

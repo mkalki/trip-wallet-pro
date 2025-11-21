@@ -1,168 +1,127 @@
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, ShoppingBag, Utensils, Hotel, Plane, Coffee, Trash2 } from "lucide-react";
+import { Calendar } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
-// Mock data
-const mockExpenses = [
-  {
-    id: "1",
-    tripId: "1",
-    tripTitle: "Summer in Tokyo",
-    amount: 85,
-    category: "Food",
-    date: "2024-07-16",
-    description: "Dinner at Ichiran Ramen",
-    paymentMethod: "Credit Card",
-  },
-  {
-    id: "2",
-    tripId: "1",
-    tripTitle: "Summer in Tokyo",
-    amount: 120,
-    category: "Accommodation",
-    date: "2024-07-15",
-    description: "Hotel Park Hyatt - Night 1",
-    paymentMethod: "Credit Card",
-  },
-  {
-    id: "3",
-    tripId: "2",
-    tripTitle: "European Adventure",
-    amount: 450,
-    category: "Travel",
-    date: "2024-09-10",
-    description: "Round-trip flight tickets",
-    paymentMethod: "Debit Card",
-  },
-  {
-    id: "4",
-    tripId: "1",
-    tripTitle: "Summer in Tokyo",
-    amount: 45,
-    category: "Activities",
-    date: "2024-07-17",
-    description: "Sensoji Temple tour",
-    paymentMethod: "Cash",
-  },
-];
-
-const getCategoryIcon = (category: string) => {
-  switch (category) {
-    case "Food":
-      return <Utensils className="w-4 h-4" />;
-    case "Accommodation":
-      return <Hotel className="w-4 h-4" />;
-    case "Travel":
-      return <Plane className="w-4 h-4" />;
-    case "Activities":
-      return <Coffee className="w-4 h-4" />;
-    default:
-      return <ShoppingBag className="w-4 h-4" />;
-  }
-};
-
-const getCategoryColor = (category: string) => {
-  switch (category) {
-    case "Food":
-      return "bg-secondary/10 text-secondary border-secondary/20";
-    case "Accommodation":
-      return "bg-primary/10 text-primary border-primary/20";
-    case "Travel":
-      return "bg-accent/10 text-accent border-accent/20";
-    case "Activities":
-      return "bg-warning/10 text-warning border-warning/20";
-    default:
-      return "bg-muted text-muted-foreground";
-  }
-};
+interface Expense {
+  id: string;
+  amount: number;
+  category: string;
+  date: string;
+  note: string | null;
+  payment_method: string | null;
+  trip_id: string;
+  trips?: {
+    title: string;
+  };
+}
 
 const ExpenseList = () => {
-  return (
-    <div className="space-y-4">
-      {/* Filters */}
+  const { user } = useAuth();
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) {
+      fetchExpenses();
+    }
+  }, [user]);
+
+  const fetchExpenses = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("expenses")
+        .select(`
+          *,
+          trips (title)
+        `)
+        .eq("user_id", user?.id)
+        .order("date", { ascending: false })
+        .limit(10);
+
+      if (error) throw error;
+      setExpenses(data || []);
+    } catch (error) {
+      console.error("Error fetching expenses:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
       <Card className="shadow-soft">
-        <CardHeader>
-          <CardTitle>Filter Expenses</CardTitle>
-          <CardDescription>Search and filter your expenses</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search expenses..." className="pl-9" />
-            </div>
-            <Select>
-              <SelectTrigger>
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                <SelectItem value="food">Food</SelectItem>
-                <SelectItem value="accommodation">Accommodation</SelectItem>
-                <SelectItem value="travel">Travel</SelectItem>
-                <SelectItem value="activities">Activities</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select>
-              <SelectTrigger>
-                <SelectValue placeholder="Trip" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Trips</SelectItem>
-                <SelectItem value="1">Summer in Tokyo</SelectItem>
-                <SelectItem value="2">European Adventure</SelectItem>
-                <SelectItem value="3">Beach Getaway</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        <CardContent className="py-8 text-center text-muted-foreground">
+          Loading expenses...
         </CardContent>
       </Card>
+    );
+  }
 
-      {/* Expense List */}
-      <div className="space-y-3">
-        {mockExpenses.map((expense) => (
-          <Card key={expense.id} className="shadow-soft hover:shadow-medium transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4 flex-1">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${getCategoryColor(expense.category)}`}>
-                    {getCategoryIcon(expense.category)}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h4 className="font-semibold">{expense.description}</h4>
-                      <Badge variant="outline" className="text-xs">
-                        {expense.category}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span>{expense.tripTitle}</span>
-                      <span>•</span>
-                      <span>{new Date(expense.date).toLocaleDateString()}</span>
-                      <span>•</span>
-                      <span>{expense.paymentMethod}</span>
-                    </div>
-                  </div>
+  if (expenses.length === 0) {
+    return (
+      <Card className="shadow-soft">
+        <CardHeader>
+          <CardTitle>Recent Expenses</CardTitle>
+          <CardDescription>Your latest expense entries across all trips</CardDescription>
+        </CardHeader>
+        <CardContent className="py-8 text-center text-muted-foreground">
+          No expenses yet. Add expenses to your trips to see them here!
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="shadow-soft">
+      <CardHeader>
+        <CardTitle>Recent Expenses</CardTitle>
+        <CardDescription>Your latest expense entries across all trips</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3">
+          {expenses.map((expense) => (
+            <div
+              key={expense.id}
+              className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+            >
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <Badge variant="secondary">{expense.category}</Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {expense.trips?.title || "Unknown Trip"}
+                  </span>
                 </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
-                    <div className="text-lg font-bold text-foreground">
-                      ${expense.amount.toLocaleString()}
-                    </div>
+                {expense.note && (
+                  <p className="text-sm text-muted-foreground mb-1">{expense.note}</p>
+                )}
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1">
+                    <Calendar className="w-3 h-3" />
+                    <span>{new Date(expense.date).toLocaleDateString()}</span>
                   </div>
-                  <Button variant="ghost" size="icon">
-                    <Trash2 className="w-4 h-4 text-destructive" />
-                  </Button>
+                  {expense.payment_method && (
+                    <>
+                      <span>•</span>
+                      <span>{expense.payment_method}</span>
+                    </>
+                  )}
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    </div>
+              <div className="flex items-center gap-4">
+                <div className="text-right">
+                  <div className="text-lg font-semibold text-foreground">
+                    ${expense.amount.toLocaleString()}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 };
 
