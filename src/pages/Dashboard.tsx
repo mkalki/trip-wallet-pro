@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -8,19 +8,58 @@ import { useNavigate } from "react-router-dom";
 import TripList from "@/components/TripList";
 import ExpenseList from "@/components/ExpenseList";
 import BudgetOverview from "@/components/BudgetOverview";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("overview");
+  const { user, signOut } = useAuth();
+  const [totalBudget, setTotalBudget] = useState(0);
+  const [totalSpent, setTotalSpent] = useState(0);
 
-  // Mock data - will be replaced with real data
-  const totalBudget = 5000;
-  const totalSpent = 3250;
-  const budgetPercentage = (totalSpent / totalBudget) * 100;
+  useEffect(() => {
+    if (user) {
+      fetchDashboardData();
+    }
+  }, [user]);
 
-  const handleLogout = () => {
+  const fetchDashboardData = async () => {
+    try {
+      // Fetch all trips for the user
+      const { data: trips, error: tripsError } = await supabase
+        .from("trips")
+        .select("total_budget, id")
+        .eq("user_id", user?.id);
+
+      if (tripsError) throw tripsError;
+
+      // Calculate total budget
+      const budget = trips?.reduce((sum, trip) => sum + trip.total_budget, 0) || 0;
+      setTotalBudget(budget);
+
+      // Fetch all expenses for the user
+      const { data: expenses, error: expensesError } = await supabase
+        .from("expenses")
+        .select("amount")
+        .eq("user_id", user?.id);
+
+      if (expensesError) throw expensesError;
+
+      // Calculate total spent
+      const spent = expenses?.reduce((sum, expense) => sum + expense.amount, 0) || 0;
+      setTotalSpent(spent);
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error);
+    }
+  };
+
+  const handleLogout = async () => {
+    await signOut();
     navigate("/auth");
   };
+
+  const budgetPercentage = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
 
   return (
     <div className="min-h-screen bg-background">

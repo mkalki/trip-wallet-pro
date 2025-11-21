@@ -1,44 +1,90 @@
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MapPin, Calendar, DollarSign, Edit, Trash2 } from "lucide-react";
+import { MapPin, Calendar, DollarSign, Trash2 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
+import { useToast } from "@/hooks/use-toast";
 
-// Mock data
-const mockTrips = [
-  {
-    id: "1",
-    title: "Summer in Tokyo",
-    destination: "Tokyo, Japan",
-    startDate: "2024-07-15",
-    endDate: "2024-07-25",
-    totalBudget: 3500,
-    spent: 2100,
-    status: "active",
-  },
-  {
-    id: "2",
-    title: "European Adventure",
-    destination: "Paris, France",
-    startDate: "2024-09-10",
-    endDate: "2024-09-20",
-    totalBudget: 4500,
-    spent: 1150,
-    status: "upcoming",
-  },
-  {
-    id: "3",
-    title: "Beach Getaway",
-    destination: "Bali, Indonesia",
-    startDate: "2024-06-01",
-    endDate: "2024-06-10",
-    totalBudget: 2000,
-    spent: 2000,
-    status: "completed",
-  },
-];
+interface Trip {
+  id: string;
+  title: string;
+  destination: string;
+  start_date: string;
+  end_date: string;
+  total_budget: number;
+  expenses?: { amount: number }[];
+}
 
 const TripList = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) {
+      fetchTrips();
+    }
+  }, [user]);
+
+  const fetchTrips = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("trips")
+        .select(`
+          *,
+          expenses (amount)
+        `)
+        .eq("user_id", user?.id)
+        .order("start_date", { ascending: false });
+
+      if (error) throw error;
+      setTrips(data || []);
+    } catch (error) {
+      console.error("Error fetching trips:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteTrip = async (tripId: string) => {
+    try {
+      const { error } = await supabase
+        .from("trips")
+        .delete()
+        .eq("id", tripId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success!",
+        description: "Trip deleted successfully",
+      });
+
+      fetchTrips();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete trip",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const getTripStatus = (startDate: string, endDate: string) => {
+    const now = new Date();
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    if (now > end) return "completed";
+    if (now >= start && now <= end) return "active";
+    return "upcoming";
+  };
   const getStatusColor = (status: string) => {
     switch (status) {
       case "active":
@@ -59,11 +105,28 @@ const TripList = () => {
     return "text-success";
   };
 
+  if (loading) {
+    return <div className="text-center py-8 text-muted-foreground">Loading trips...</div>;
+  }
+
+  if (trips.length === 0) {
+    return (
+      <Card className="shadow-soft">
+        <CardContent className="py-12 text-center">
+          <p className="text-muted-foreground mb-4">No trips yet. Create your first trip to get started!</p>
+          <Button onClick={() => navigate("/trips/new")}>Create Trip</Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      {mockTrips.map((trip) => {
-        const budgetPercentage = (trip.spent / trip.totalBudget) * 100;
-        const remaining = trip.totalBudget - trip.spent;
+      {trips.map((trip) => {
+        const spent = trip.expenses?.reduce((sum, exp) => sum + exp.amount, 0) || 0;
+        const budgetPercentage = (spent / trip.total_budget) * 100;
+        const remaining = trip.total_budget - spent;
+        const status = getTripStatus(trip.start_date, trip.end_date);
 
         return (
           <Card key={trip.id} className="shadow-soft hover:shadow-medium transition-all">
@@ -76,8 +139,8 @@ const TripList = () => {
                     {trip.destination}
                   </CardDescription>
                 </div>
-                <Badge variant={getStatusColor(trip.status)}>
-                  {trip.status}
+                <Badge variant={getStatusColor(status)}>
+                  {status}
                 </Badge>
               </div>
             </CardHeader>
@@ -87,7 +150,7 @@ const TripList = () => {
                   <div className="flex items-center gap-1">
                     <Calendar className="w-4 h-4" />
                     <span>
-                      {new Date(trip.startDate).toLocaleDateString()} - {new Date(trip.endDate).toLocaleDateString()}
+                      {new Date(trip.start_date).toLocaleDateString()} - {new Date(trip.end_date).toLocaleDateString()}
                     </span>
                   </div>
                 </div>
@@ -98,8 +161,8 @@ const TripList = () => {
                       <DollarSign className="w-4 h-4" />
                       <span className="font-medium">Budget</span>
                     </div>
-                    <span className={getBudgetStatus(trip.spent, trip.totalBudget)}>
-                      ${trip.spent.toLocaleString()} / ${trip.totalBudget.toLocaleString()}
+                    <span className={getBudgetStatus(spent, trip.total_budget)}>
+                      ${spent.toLocaleString()} / ${trip.total_budget.toLocaleString()}
                     </span>
                   </div>
                   <Progress value={budgetPercentage} />
@@ -109,14 +172,19 @@ const TripList = () => {
                 </div>
 
                 <div className="flex gap-2 pt-2">
-                  <Button variant="outline" size="sm" className="flex-1">
-                    <Edit className="w-4 h-4 mr-1" />
-                    Edit
-                  </Button>
-                  <Button variant="outline" size="sm" className="flex-1">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="flex-1"
+                    onClick={() => navigate(`/trips/${trip.id}`)}
+                  >
                     View Details
                   </Button>
-                  <Button variant="ghost" size="sm">
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => handleDeleteTrip(trip.id)}
+                  >
                     <Trash2 className="w-4 h-4 text-destructive" />
                   </Button>
                 </div>
